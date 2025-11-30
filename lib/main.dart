@@ -23,7 +23,7 @@ class IoTDeviceDashboard extends StatefulWidget {
 }
 
 class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
-  final _baseUrl = 'http://192.168.1.6:8080';
+  final _baseUrl = 'https://leana-dependable-belen.ngrok-free.dev ';
   List<Device> _devices = [];
   final _deviceNameController = TextEditingController();
   final _deviceTopicController = TextEditingController();
