@@ -1,74 +1,35 @@
 workflows:
   ios-sidestore:
-    name: Flutter → Unsigned IPA + Runner.app for SideStore
+    name: Flutter → Unsigned IPA + Runner.app cho SideStore
     instance_type: mac_mini_m2
-    max_build_duration: 120
+    max_build_duration: 60
     environment:
       flutter: stable
       xcode: latest
 
-    triggering:
-      events:
-        - push
-        - tag
-
     scripts:
-      - name: Get Flutter packages
+      - name: Get packages
         script: flutter pub get
 
-      - name: Flutter build iOS --no-codesign
-        script: flutter build ios --release --no-codesign
-
-      - name: Archive với tắt hoàn toàn code signing
+      - name: Build IPA unsigned + lấy .app (một lệnh duy nhất)
         script: |
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace \
-                     -scheme Runner \
-                     -configuration Release \
-                     -sdk iphoneos \
-                     -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
-                     CODE_SIGNING_ALLOWED=NO \
-                     CODE_SIGNING_REQUIRED=NO \
-                     CODE_SIGN_IDENTITY="" \
-                     CODE_SIGN_ENTITLEMENTS="" \
-                     archive
+          # Lệnh thần thánh – Flutter tự làm hết, không cần xcodebuild archive/export
+          flutter build ipa --release --no-codesign
 
-      - name: Create ExportOptions.plist chính xác (fix lỗi plist format)
-        script: |
-          plist_path="$FCI_BUILD_DIR/exportOptions.plist"
-          /bin/cat > "$plist_path" <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-          </dict>
-          </plist>
-          EOF
-          echo "=== exportOptions.plist ==="
-          cat "$plist_path"
+          # Copy Runner.app ra thư mục gốc để dùng với SideStore PC
+          cp -r build/ios/iphoneos/Runner.app .
 
-      - name: Export IPA (unsigned)
-        script: |
-          xcodebuild -exportArchive \
-            -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
-            -exportPath "$FCI_BUILD_DIR/ipa" \
-            -exportOptionsPlist "$FCI_BUILD_DIR/exportOptions.plist" \
-            || flutter build ipa --release --no-codesign
-
-      - name: Copy .app + zip + rename
-        script: |
-          cp -r "$FCI_BUILD_DIR/Runner.xcarchive/Products/Applications/Runner.app" "$FCI_BUILD_DIR/"
-          cd "$FCI_BUILD_DIR"
-          ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
+          # Đổi tên IPA cho đẹp (có commit hash)
           COMMIT=$(git rev-parse --short HEAD)
-          mv ipa/Runner.ipa "ipa/Runner-${COMMIT}.ipa" || true
+          mv build/ios/ipa/*.ipa "Runner-${COMMIT}.ipa"
+
+          # Tạo zip nhẹ
+          ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
 
     artifacts:
-      - $FCI_BUILD_DIR/ipa/*.ipa
-      - $FCI_BUILD_DIR/Runner.app
-      - $FCI_BUILD_DIR/Runner.app.zip
+      - Runner-*.ipa        # IPA unsigned → cài bằng SideStore/AltStore/TrollStore
+      - Runner.app          # folder .app → kéo thả vào SideStore PC (Win/Mac/Linux)
+      - Runner.app.zip      # bản nén nhẹ nhất
 
     publishing:
       email:
