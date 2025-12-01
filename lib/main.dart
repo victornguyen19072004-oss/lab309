@@ -23,11 +23,14 @@ class IoTDeviceDashboard extends StatefulWidget {
 }
 
 class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
+  // Thay đổi: Sử dụng địa chỉ IP tĩnh cần cẩn thận.
+  // Đảm bảo cả điện thoại/giả lập và máy chủ Spring Boot cùng mạng LAN
   final _baseUrl = 'http://172.20.10.4:8080';
   List<Device> _devices = [];
   final _deviceNameController = TextEditingController();
   final _deviceTopicController = TextEditingController();
   final _payloadController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +74,7 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
       body: _payloadController.text,
     );
     if (response.statusCode == 200) {
+      // Thay đổi: Có thể gọi fetchTelemetry tại đây để cập nhật ngay sau khi gửi lệnh.
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Lệnh đã gửi')));
@@ -78,7 +82,12 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
   }
 
   Future<void> _showTelemetryDialog(int deviceId, String deviceName) async {
+    // Luôn gọi fetchTelemetry để đảm bảo dữ liệu mới nhất
     List<Telemetry> telemetries = await fetchTelemetry(deviceId);
+
+    // Sử dụng StatefulWidget cho Dialog để có thể cập nhật dữ liệu trực tiếp
+    // nếu bạn muốn thêm tính năng Refresh
+    // Tuy nhiên, ở đây chỉ cần FutureBuilder là đủ cho một lần load
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -140,11 +149,32 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
                 child: ListTile(
                   title: Text(d.name),
                   subtitle: Text(d.topic),
-                  trailing: ElevatedButton(
-                    onPressed: () => controlDevice(d.id),
-                    child: const Text('Gửi lệnh'),
+                  // Nút và chức năng được thay đổi tại đây:
+                  trailing: Row(
+                    mainAxisSize:
+                        MainAxisSize.min, // Giới hạn chiều rộng của Row
+                    children: [
+                      // Nút Gửi lệnh (Đã có)
+                      ElevatedButton(
+                        onPressed: () => controlDevice(d.id),
+                        child: const Text('Gửi lệnh'),
+                      ),
+                      const SizedBox(width: 8),
+                      // Nút Xem dữ liệu (MỚI)
+                      IconButton(
+                        icon: const Icon(
+                          Icons.analytics_outlined,
+                          color: Colors.indigo,
+                        ),
+                        onPressed: () => _showTelemetryDialog(d.id, d.name),
+                        tooltip: 'Xem dữ liệu Telemetry',
+                      ),
+                    ],
                   ),
-                  onTap: () => _showTelemetryDialog(d.id, d.name),
+                  onTap: () => _showTelemetryDialog(
+                    d.id,
+                    d.name,
+                  ), // Giữ lại chức năng xem dữ liệu khi chạm vào ListTile
                 ),
               ),
             ),
