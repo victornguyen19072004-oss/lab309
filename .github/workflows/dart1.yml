@@ -1,33 +1,24 @@
 name: Build IPA for SideStore
-
 on: workflow_dispatch
-
 jobs:
   build:
-    runs-on: macos-14                  # bắt buộc, macos-latest hay lỗi pod
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-
+        with: { channel: stable }
       - run: flutter pub get
-
-      - run: pod install --repo-update
+      - name: Pod install
+        run: pod install --repo-update
         working-directory: ios
-
       - run: flutter build ios --release --no-codesign
-
-      - name: Tạo file IPA duy nhất
+      - name: Tạo IPA
         run: |
           cd build/ios/iphoneos
-          mkdir Payload
-          mv Runner.app Payload/
+          mkdir Payload && mv Runner.app Payload/
           zip -r9 Flutter.ipa Payload
-
-      - name: Upload IPA (chỉ 1 file)
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: SideStore-IPA
-          path: build/ios/iphoneos/*.ipa
+          path: build/ios/iphoneos/Flutter.ipa
