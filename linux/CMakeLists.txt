@@ -7,7 +7,11 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "lab309")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
+<<<<<<< HEAD
 set(APPLICATION_ID "com.example.lab309")
+=======
+set(APPLICATION_ID "com.nguyendinhphuoccao.lab309")
+>>>>>>> e4a1d354c6fe1b0b035fef461773daeef687dfdc
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
