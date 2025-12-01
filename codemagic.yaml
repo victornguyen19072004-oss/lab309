@@ -1,9 +1,21 @@
 workflows:
+  sample-workflow:
+    name: Codemagic Sample Workflow
+    instance_type: mac_mini_m2 
 
-    sample-workflow:
-
-        name: Codemagic Sample Workflow
-
-        max_build_duration: 120
-
-        instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      
+    scripts:
+      # Lệnh này BẮT BUỘC phải có để build
+      - name: Build iOS Simulator
+        script: |
+          flutter packages get
+          flutter build ios # Lệnh build thực tế
+          
+    artifacts:
+      # Lệnh này BẮT BUỘC phải có để Codemagic thu thập file
+      - build/ios/iphonesimulator/Runner.app 
+      
+ 
