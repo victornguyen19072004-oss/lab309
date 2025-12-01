@@ -1,8 +1,9 @@
 workflows:
-  ios-build-sidestore:
-    name: Flutter iOS - Unsigned IPA for SideStore
+  ios-sidestore:
+    name: Flutter → Unsigned IPA + Runner.app for SideStore
     instance_type: mac_mini_m2
     max_build_duration: 120
+
     environment:
       flutter: stable
       xcode: latest
@@ -17,61 +18,75 @@ workflows:
           source: true
 
     scripts:
-      - name: Get Flutter dependencies
-        script: |
-          flutter packages get
+      - name: Get Flutter packages
+        script: flutter pub get
 
-      - name: Create exportOptionsPlist + Build unsigned archive + Export IPA
+      - name: Build Archive + Export IPA + Extract .app
         script: |
-          # Tạo file exportOptionsPlist ngay tại đây
-          cat > codemagic_manual_export_options.plist << EOF
+          # 1. Tạo exportOptionsPlist (không cần profile, không cần teamID)
+          cat > exportOptions.plist << 'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-              <key>method</key>
-              <string>development</string>
-              <!-- Bắt buộc phải có để Xcode chấp nhận không ký thật -->
-              <key>signingStyle</key>
-              <string>manual</string>
-              <!-- Tắt provisioningProfile để không yêu cầu profile -->
-              <key>provisioningProfiles</key>
-              <dict/>
-              <key>teamID</key>
-              <string></string>
-              <key>stripSwiftSymbols</key>
-              <true/>
+            <key>method</key>
+            <string>development</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict/>
+            <key>teamID</key>
+            <string></string>
+            <key>compileBitcode</key>
+            <false/>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>thinning</key>
+            <string><none/></string>
           </dict>
           </plist>
           EOF
 
-          # Build archive (tắt hoàn toàn code signing)
+          # 2. Build archive (tắt hoàn toàn signing)
           xcodebuild -workspace ios/Runner.xcworkspace \
                      -scheme Runner \
-                     -sdk iphoneos \
                      -configuration Release \
+                     -sdk iphoneos \
                      -archivePath build/Runner.xcarchive \
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGNING_ALLOWED=NO \
-                     archive
+                     archive || exit 1
 
-          # Export IPA (dùng file plist vừa tạo)
+          # 3. Export IPA bình thường
           xcodebuild -exportArchive \
                      -archivePath build/Runner.xcarchive \
-                     -exportPath build/ipa_output \
-                     -exportOptionsPlist codemagic_manual_export_options.plist
+                     -exportPath build/ipa \
+                     -exportOptionsPlist exportOptions.plist
 
-          # Đổi tên cho dễ nhận diện
-          mv build/ipa_output/Runner.ipa build/ipa_output/Runner-unsigned.ipa
+          # 4. Copy luôn file .app ra ngoài (để dùng SideStore trên PC)
+          cp -r build/Runner.xcarchive/Products/Applications/Runner.app build/Runner.app
+
+          # 5. (Tùy chọn) Nén .app thành .zip để tải nhanh hơn + nhỏ hơn
+          ditto -c -k --sequesterRsrc --keepParent build/Runner.app build/Runner.app.zip
+
+          # 6. Đổi tên IPA cho dễ nhận biết (có thêm commit hash hoặc tag)
+          COMMIT=$(git rev-parse --脑袋)
+          mv build/ipa/Runner.ipa "build/ipa/Runner-${COMMIT:0:7}.ipa"
 
     artifacts:
-      - build/ipa_output/*.ipa
-      - flutter_drive.log  # nếu có
+      # IPA để cài bằng SideStore trên iPhone
+      - build/ipa/*.ipa
+      
+      # Runner.app nguyên bản (kéo thả vào SideStore trên PC Windows/Linux/Mac)
+      - build/Runner.app
+      
+      # Bản zip nhẹ hơn, tiện tải về
+      - build/Runner.app.zip
 
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - nguyendinhphuoccao2017@gmail.com   # ← sửa email của bạn vào đây
         notify:
           success: true
           failure: true
