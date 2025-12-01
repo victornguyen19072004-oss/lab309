@@ -11,38 +11,15 @@ workflows:
       events:
         - push
         - tag
-      branch_patterns:
-        - pattern: '**'
-          include: true
-          source: true
 
     scripts:
       - name: Get Flutter packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
-      - name: Flutter build iOS (no code signing)
-        script: |
-          flutter build ios --release --no-codesign
+      - name: Flutter build iOS --no-codesign
+        script: flutter build ios --release --no-codesign
 
-      - name: Create fake ExportOptions.plist (bắt buộc phải có file này dù không ký)
-        script: |
-          cat > "$FCI_BUILD_DIR/exportOptions.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>compileBitcode</key>
-              <false/>
-              <key>thinning</key>
-              <string><none/></string>
-          </dict>
-          </plist>
-          EOF
-
-      - name: Archive bằng xcodebuild với tắt hoàn toàn code signing (Xcode 16+ vẫn chấp nhận)
+      - name: Archive với tắt hoàn toàn code signing
         script: |
           cd ios
           xcodebuild -workspace Runner.xcworkspace \
@@ -54,27 +31,39 @@ workflows:
                      CODE_SIGNING_REQUIRED=NO \
                      CODE_SIGN_IDENTITY="" \
                      CODE_SIGN_ENTITLEMENTS="" \
-                     CODE_SIGNING_IDENTITY="" \
                      archive
+
+      - name: Create ExportOptions.plist chính xác (fix lỗi plist format)
+        script: |
+          plist_path="$FCI_BUILD_DIR/exportOptions.plist"
+          /bin/cat > "$plist_path" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+          </dict>
+          </plist>
+          EOF
+          echo "=== exportOptions.plist ==="
+          cat "$plist_path"
 
       - name: Export IPA (unsigned)
         script: |
           xcodebuild -exportArchive \
-                     -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
-                     -exportPath "$FCI_BUILD_DIR/ipa" \
-                     -exportOptionsPlist "$FCI_BUILD_DIR/exportOptions.plist"
+            -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
+            -exportPath "$FCI_BUILD_DIR/ipa" \
+            -exportOptionsPlist "$FCI_BUILD_DIR/exportOptions.plist" \
+            || flutter build ipa --release --no-codesign
 
-      - name: Copy Runner.app ra ngoài + zip
+      - name: Copy .app + zip + rename
         script: |
           cp -r "$FCI_BUILD_DIR/Runner.xcarchive/Products/Applications/Runner.app" "$FCI_BUILD_DIR/"
-
-          # Đổi tên IPA có commit hash
-          COMMIT=$(git rev-parse --short HEAD)
-          mv "$FCI_BUILD_DIR/ipa/Runner.ipa" "$FCI_BUILD_DIR/ipa/Runner-${COMMIT}.ipa"
-
-          # Tạo .zip cho SideStore PC
           cd "$FCI_BUILD_DIR"
           ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
+          COMMIT=$(git rev-parse --short HEAD)
+          mv ipa/Runner.ipa "ipa/Runner-${COMMIT}.ipa" || true
 
     artifacts:
       - $FCI_BUILD_DIR/ipa/*.ipa
