@@ -16,6 +16,6 @@ workflows:
           
     artifacts:
       # Lệnh này BẮT BUỘC phải có để Codemagic thu thập file
-      - build/ios/iphonesimulator/Runner.app 
+      - build/ios/iphoneos/Runner.app 
       
  
