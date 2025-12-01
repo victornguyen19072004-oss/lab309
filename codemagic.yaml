@@ -12,7 +12,7 @@ workflows:
       - name: Build iOS Simulator
         script: |
           flutter packages get
-          flutter build ios # Lệnh build thực tế
+          flutter build ios --no-codesign
           
     artifacts:
       # Lệnh này BẮT BUỘC phải có để Codemagic thu thập file
