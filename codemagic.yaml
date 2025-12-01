@@ -1,31 +1,77 @@
 workflows:
-  sample-workflow:
-    name: Codemagic Sample Workflow
-    instance_type: mac_mini_m2 
-
+  ios-build-sidestore:
+    name: Flutter iOS - Unsigned IPA for SideStore
+    instance_type: mac_mini_m2
+    max_build_duration: 120
     environment:
       flutter: stable
       xcode: latest
-      
+
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: '**'
+          include: true
+          source: true
+
     scripts:
-    - name: Build Unsigned IPA for SideStore
-      script: |
-        # 1. Lấy dependencies
-        flutter packages get
-        
-        # 2. Xây dựng Product Archive (Vẫn tắt ký mã)
-        xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos \
-          -configuration Release CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-          -archivePath build/Runner.xcarchive archive
-          
-        # 3. Xuất file IPA sử dụng ExportOptions không Provisioning Profile
-        # Sử dụng tùy chọn exportOptionsPlist và chỉ định method là development
-        # Điều này tạo ra IPA với placeholder signing hoặc minimal signing.
-        # Rất quan trọng: Bỏ cờ -allowProvisioningUpdates để tránh việc tự động tìm profile.
-        xcodebuild -exportArchive -archivePath build/Runner.xcarchive \
-          -exportPath build/ipa_output \
-          -exportOptionsPlist ./codemagic_manual_export_options.plist
+      - name: Get Flutter dependencies
+        script: |
+          flutter packages get
+
+      - name: Create exportOptionsPlist + Build unsigned archive + Export IPA
+        script: |
+          # Tạo file exportOptionsPlist ngay tại đây
+          cat > codemagic_manual_export_options.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <!-- Bắt buộc phải có để Xcode chấp nhận không ký thật -->
+              <key>signingStyle</key>
+              <string>manual</string>
+              <!-- Tắt provisioningProfile để không yêu cầu profile -->
+              <key>provisioningProfiles</key>
+              <dict/>
+              <key>teamID</key>
+              <string></string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # Build archive (tắt hoàn toàn code signing)
+          xcodebuild -workspace ios/Runner.xcworkspace \
+                     -scheme Runner \
+                     -sdk iphoneos \
+                     -configuration Release \
+                     -archivePath build/Runner.xcarchive \
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGNING_ALLOWED=NO \
+                     archive
+
+          # Export IPA (dùng file plist vừa tạo)
+          xcodebuild -exportArchive \
+                     -archivePath build/Runner.xcarchive \
+                     -exportPath build/ipa_output \
+                     -exportOptionsPlist codemagic_manual_export_options.plist
+
+          # Đổi tên cho dễ nhận diện
+          mv build/ipa_output/Runner.ipa build/ipa_output/Runner-unsigned.ipa
 
     artifacts:
-      # Thu thập file .ipa
-      - build/ipa_output/Runner.ipa
+      - build/ipa_output/*.ipa
+      - flutter_drive.log  # nếu có
+
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
