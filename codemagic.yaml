@@ -3,7 +3,6 @@ workflows:
     name: Flutter → Unsigned IPA + Runner.app for SideStore
     instance_type: mac_mini_m2
     max_build_duration: 120
-
     environment:
       flutter: stable
       xcode: latest
@@ -19,74 +18,73 @@ workflows:
 
     scripts:
       - name: Get Flutter packages
-        script: flutter pub get
-
-      - name: Build Archive + Export IPA + Extract .app
         script: |
-          # 1. Tạo exportOptionsPlist (không cần profile, không cần teamID)
-          cat > exportOptions.plist << 'EOF'
+          flutter pub get
+
+      - name: Flutter build iOS (no code signing)
+        script: |
+          flutter build ios --release --no-codesign
+
+      - name: Create fake ExportOptions.plist (bắt buộc phải có file này dù không ký)
+        script: |
+          cat > "$FCI_BUILD_DIR/exportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key>
-            <string>development</string>
-            <key>signingStyle</key>
-            <string>manual</string>
-            <key>provisioningProfiles</key>
-            <dict/>
-            <key>teamID</key>
-            <string></string>
-            <key>compileBitcode</key>
-            <false/>
-            <key>stripSwiftSymbols</key>
-            <true/>
-            <key>thinning</key>
-            <string><none/></string>
+              <key>method</key>
+              <string>app-store</string>
+              <key>compileBitcode</key>
+              <false/>
+              <key>thinning</key>
+              <string><none/></string>
           </dict>
           </plist>
           EOF
 
-          # 2. Build archive (tắt hoàn toàn signing)
-          xcodebuild -workspace ios/Runner.xcworkspace \
+      - name: Archive bằng xcodebuild với tắt hoàn toàn code signing (Xcode 16+ vẫn chấp nhận)
+        script: |
+          cd ios
+          xcodebuild -workspace Runner.xcworkspace \
                      -scheme Runner \
                      -configuration Release \
                      -sdk iphoneos \
-                     -archivePath build/Runner.xcarchive \
-                     CODE_SIGNING_REQUIRED=NO \
+                     -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
                      CODE_SIGNING_ALLOWED=NO \
-                     archive || exit 1
+                     CODE_SIGNING_REQUIRED=NO \
+                     CODE_SIGN_IDENTITY="" \
+                     CODE_SIGN_ENTITLEMENTS="" \
+                     CODE_SIGNING_IDENTITY="" \
+                     archive
 
-          # 3. Export IPA bình thường
+      - name: Export IPA (unsigned)
+        script: |
           xcodebuild -exportArchive \
-                     -archivePath build/Runner.xcarchive \
-                     -exportPath build/ipa \
-                     -exportOptionsPlist exportOptions.plist
+                     -archivePath "$FCI_BUILD_DIR/Runner.xcarchive" \
+                     -exportPath "$FCI_BUILD_DIR/ipa" \
+                     -exportOptionsPlist "$FCI_BUILD_DIR/exportOptions.plist"
 
-          # 4. Copy luôn file .app ra ngoài (để dùng SideStore trên PC)
-          cp -r build/Runner.xcarchive/Products/Applications/Runner.app build/Runner.app
+      - name: Copy Runner.app ra ngoài + zip
+        script: |
+          cp -r "$FCI_BUILD_DIR/Runner.xcarchive/Products/Applications/Runner.app" "$FCI_BUILD_DIR/"
 
-          # 5. (Tùy chọn) Nén .app thành .zip để tải nhanh hơn + nhỏ hơn
-          ditto -c -k --sequesterRsrc --keepParent build/Runner.app build/Runner.app.zip
+          # Đổi tên IPA có commit hash
+          COMMIT=$(git rev-parse --short HEAD)
+          mv "$FCI_BUILD_DIR/ipa/Runner.ipa" "$FCI_BUILD_DIR/ipa/Runner-${COMMIT}.ipa"
 
-          # 6. Đổi tên IPA cho dễ nhận biết (có thêm commit hash hoặc tag)
-          COMMIT=$(git rev-parse --脑袋)
-          mv build/ipa/Runner.ipa "build/ipa/Runner-${COMMIT:0:7}.ipa"
+          # Tạo .zip cho SideStore PC
+          cd "$FCI_BUILD_DIR"
+          ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
 
     artifacts:
-      # IPA để cài bằng SideStore trên iPhone
-      - build/ipa/*.ipa
-      
-      # Runner.app nguyên bản (kéo thả vào SideStore trên PC Windows/Linux/Mac)
-      - build/Runner.app
-      
-      # Bản zip nhẹ hơn, tiện tải về
-      - build/Runner.app.zip
+      - $FCI_BUILD_DIR/ipa/*.ipa
+      - $FCI_BUILD_DIR/Runner.app
+      - $FCI_BUILD_DIR/Runner.app.zip
 
     publishing:
       email:
         recipients:
-          - nguyendinhphuoccao2017@gmail.com   # ← sửa email của bạn vào đây
+          - nguyendinhphuoccao2017@gmail.com
         notify:
           success: true
           failure: true
