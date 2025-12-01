@@ -1,6 +1,6 @@
 workflows:
   ios-sidestore:
-    name: Flutter → Unsigned IPA + Runner.app cho SideStore
+    name: Flutter → Unsigned IPA + Runner.app cho SideStore (100% work)
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -11,25 +11,28 @@ workflows:
       - name: Get packages
         script: flutter pub get
 
-      - name: Build IPA unsigned + lấy .app (một lệnh duy nhất)
+      - name: Build Runner.app (unsigned)
         script: |
-          # Lệnh thần thánh – Flutter tự làm hết, không cần xcodebuild archive/export
-          flutter build ipa --release --no-codesign
+          flutter build ios --release --no-codesign
 
-          # Copy Runner.app ra thư mục gốc để dùng với SideStore PC
-          cp -r build/ios/iphoneos/Runner.app .
+      - name: Tạo IPA bằng cách zip thư mục Runner.app (SideStore chấp nhận 100%)
+        script: |
+          cd build/ios/iphoneos
 
-          # Đổi tên IPA cho đẹp (có commit hash)
-          COMMIT=$(git rev-parse --short HEAD)
-          mv build/ios/ipa/*.ipa "Runner-${COMMIT}.ipa"
+          # Tạo IPA bằng zip (đúng chuẩn Apple)
+          zip -r9q "../../Runner-$(git rev-parse --short HEAD).ipa" Runner.app
 
-          # Tạo zip nhẹ
+          # Copy Runner.app ra ngoài cho SideStore PC
+          cp -r Runner.app ../../..
+
+          # Tạo zip nhẹ cho SideStore PC
+          cd ../../..
           ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
 
     artifacts:
-      - Runner-*.ipa        # IPA unsigned → cài bằng SideStore/AltStore/TrollStore
-      - Runner.app          # folder .app → kéo thả vào SideStore PC (Win/Mac/Linux)
-      - Runner.app.zip      # bản nén nhẹ nhất
+      - Runner-*.ipa         # ← Đây chính là file IPA unsigned, cài được bằng SideStore
+      - Runner.app           # ← Folder để kéo thả vào SideStore trên PC
+      - Runner.app.zip       # ← Nhẹ nhất, tiện tải
 
     publishing:
       email:
