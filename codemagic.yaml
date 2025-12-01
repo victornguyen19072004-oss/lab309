@@ -8,14 +8,24 @@ workflows:
       xcode: latest
       
     scripts:
-      # Lệnh này BẮT BUỘC phải có để build
-      - name: Build iOS Simulator
-        script: |
-          flutter packages get
-          flutter build ios --no-codesign
+    - name: Build Unsigned IPA for SideStore
+      script: |
+        # 1. Lấy dependencies
+        flutter packages get
+        
+        # 2. Xây dựng Product Archive (Vẫn tắt ký mã)
+        xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -sdk iphoneos \
+          -configuration Release CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+          -archivePath build/Runner.xcarchive archive
           
+        # 3. Xuất file IPA sử dụng ExportOptions không Provisioning Profile
+        # Sử dụng tùy chọn exportOptionsPlist và chỉ định method là development
+        # Điều này tạo ra IPA với placeholder signing hoặc minimal signing.
+        # Rất quan trọng: Bỏ cờ -allowProvisioningUpdates để tránh việc tự động tìm profile.
+        xcodebuild -exportArchive -archivePath build/Runner.xcarchive \
+          -exportPath build/ipa_output \
+          -exportOptionsPlist ./codemagic_manual_export_options.plist
+
     artifacts:
-      # Lệnh này BẮT BUỘC phải có để Codemagic thu thập file
-      - build/ios/iphoneos/Runner.app 
-      
- 
+      # Thu thập file .ipa
+      - build/ipa_output/Runner.ipa
