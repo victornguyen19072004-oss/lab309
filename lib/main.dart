@@ -26,7 +26,7 @@ class IoTDeviceDashboard extends StatefulWidget {
 class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
   // Thay đổi: Sử dụng địa chỉ IP tĩnh cần cẩn thận.
   // Đảm bảo cả điện thoại/giả lập và máy chủ Spring Boot cùng mạng LAN
-  final _baseUrl = 'http://172.20.10.4:8080';
+  final _baseUrl = 'http://10.151.140.252:8080';
   List<Device> _devices = [];
   final _deviceNameController = TextEditingController();
   final _deviceTopicController = TextEditingController();
